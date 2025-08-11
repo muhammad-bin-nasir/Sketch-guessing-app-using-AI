@@ -34,11 +34,6 @@ class TeachingData(BaseModel):
     image_data: str
     label: str
     
-class PredictionResponse(BaseModel):
-    predictions: List[Dict[str, float]]
-    success: bool
-    message: str
-    
 class StatsResponse(BaseModel):
     total_drawings: int
     unique_classes: int
@@ -86,24 +81,24 @@ class SketchAI:
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Error processing image: {str(e)}")
     
-    def predict(self, image_data: str) -> PredictionResponse:
+    def predict(self, image_data: str) -> dict:
         if not self.model_trained:
-            return PredictionResponse(
-                predictions=[],
-                success=False,
-                message="Model not trained yet. Please teach me some drawings!"
-            )
+            return {
+                "predictions": [],
+                "success": False,
+                "message": "Model not trained yet. Please teach me some drawings!"
+            }
         
         try:
             img_data = self.base64_to_image_data(image_data)
             
             # Check if image is empty
             if np.sum(img_data) < 0.01:
-                return PredictionResponse(
-                    predictions=[],
-                    success=False,
-                    message="Draw something first!"
-                )
+                return {
+                    "predictions": [],
+                    "success": False,
+                    "message": "Draw something first!"
+                }
             
             # Make prediction
             img_data_scaled = self.scaler.transform([img_data])
@@ -122,18 +117,18 @@ class SketchAI:
                     'emoji': self.get_emoji(class_name)
                 })
             
-            return PredictionResponse(
-                predictions=predictions,
-                success=True,
-                message="Prediction successful!"
-            )
+            return {
+                "predictions": predictions,
+                "success": True,
+                "message": "Prediction successful!"
+            }
             
         except Exception as e:
-            return PredictionResponse(
-                predictions=[],
-                success=False,
-                message=f"Prediction error: {str(e)}"
-            )
+            return {
+                "predictions": [],
+                "success": False,
+                "message": f"Prediction error: {str(e)}"
+            }
     
     def teach(self, image_data: str, label: str) -> dict:
         try:
@@ -292,10 +287,11 @@ sketch_ai = SketchAI()
 async def read_root():
     return {"message": "AI Sketch Guesser API", "version": "1.0.0"}
 
-@app.post("/predict", response_model=PredictionResponse)
+@app.post("/predict")
 async def predict_drawing(drawing: DrawingData):
     """Predict what the drawing represents"""
-    return sketch_ai.predict(drawing.image_data)
+    result = sketch_ai.predict(drawing.image_data)
+    return result.dict() if hasattr(result, 'dict') else result
 
 @app.post("/teach")
 async def teach_drawing(teaching: TeachingData):
